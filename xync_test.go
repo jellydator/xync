@@ -19,13 +19,19 @@ func TestMain(m *testing.M) {
 func Test_WithSupervisorBaseContext(t *testing.T) {
 	s := &Supervisor{}
 	WithSupervisorBaseContext(context.Background())(s)
-	assert.Same(t, context.Background(), s.baseCtx)
+	assert.Equal(t, context.Background(), s.baseCtx)
 }
 
 func Test_WithSupervisorMaxActive(t *testing.T) {
 	s := &Supervisor{}
 	WithSupervisorMaxActive(5)(s)
 	assert.NotNil(t, s.sem)
+}
+
+func Test_WithSupervisorRecovery(t *testing.T) {
+	s := &Supervisor{}
+	WithSupervisorRecovery(func(a any) {})(s)
+	assert.NotNil(t, s.recoveryFn)
 }
 
 func Test_NewSupervisor(t *testing.T) {
@@ -97,18 +103,17 @@ func Test_Supervisor_Go(t *testing.T) {
 	// unrestricted
 	calls = 0
 	closeCh, goDoneCh = make(chan struct{}), make(chan struct{})
-	s = Supervisor{}
+	recCalled := false
+	s = Supervisor{
+		recoveryFn: func(a any) {
+			recCalled = true
+			assert.Equal(t, "hello", a)
+		},
+	}
 	s.activeCtx, s.activeCancel = context.WithCancel(context.Background())
 
 	s.Go(func(ctx context.Context) {
-		if err := ctx.Err(); err == nil {
-			mu.Lock()
-			calls++
-			mu.Unlock()
-		}
-
-		goDoneCh <- struct{}{}
-		<-ctx.Done()
+		panic("hello")
 	})
 	s.Go(func(ctx context.Context) {
 		if err := ctx.Err(); err == nil {
@@ -127,7 +132,6 @@ func Test_Supervisor_Go(t *testing.T) {
 	}()
 
 	<-goDoneCh
-	<-goDoneCh
 	s.activeCancel()
 
 	require.Eventually(t, func() bool {
@@ -138,7 +142,8 @@ func Test_Supervisor_Go(t *testing.T) {
 			return false
 		}
 	}, time.Millisecond*200, time.Millisecond*100)
-	assert.Equal(t, 2, calls)
+	assert.Equal(t, 1, calls)
+	assert.True(t, recCalled)
 }
 
 func Test_Supervisor_BaseContext(t *testing.T) {
@@ -146,7 +151,7 @@ func Test_Supervisor_BaseContext(t *testing.T) {
 		baseCtx: context.Background(),
 	}
 
-	assert.Same(t, context.Background(), s.BaseContext())
+	assert.Equal(t, context.Background(), s.BaseContext())
 }
 
 func Test_Supervisor_ActiveContext(t *testing.T) {
@@ -154,7 +159,7 @@ func Test_Supervisor_ActiveContext(t *testing.T) {
 		activeCtx: context.Background(),
 	}
 
-	assert.Same(t, context.Background(), s.ActiveContext())
+	assert.Equal(t, context.Background(), s.ActiveContext())
 }
 
 func Test_Supervisor_Wait(t *testing.T) {

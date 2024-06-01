@@ -10,8 +10,9 @@ import (
 
 // Supervisor handles goroutine creation and termination.
 type Supervisor struct {
-	wg  sync.WaitGroup
-	sem *semaphore.Weighted
+	wg         sync.WaitGroup
+	sem        *semaphore.Weighted
+	recoveryFn func(any)
 
 	// base context is cancelled only on close
 	baseCtx    context.Context
@@ -41,6 +42,14 @@ func WithSupervisorBaseContext(ctx context.Context) SupervisorOption {
 func WithSupervisorMaxActive(max int64) SupervisorOption {
 	return func(s *Supervisor) {
 		s.sem = semaphore.NewWeighted(max)
+	}
+}
+
+// WithSupervisorRecovery sets a function that is called on
+// each panic inside the Go() method.
+func WithSupervisorRecovery(fn func(any)) SupervisorOption {
+	return func(s *Supervisor) {
+		s.recoveryFn = fn
 	}
 }
 
@@ -77,6 +86,13 @@ func (s *Supervisor) Go(fn func(context.Context)) {
 	s.wg.Add(1)
 
 	go func() {
+		defer func() {
+			if v := recover(); v != nil {
+				s.recoveryFn(v)
+			}
+		}()
+		defer s.wg.Done()
+
 		if s.sem != nil {
 			// only context errors are returned here, however,
 			// the fn() may want to know that the context
@@ -87,7 +103,6 @@ func (s *Supervisor) Go(fn func(context.Context)) {
 		}
 
 		fn(ctx)
-		s.wg.Done()
 	}()
 }
 
