@@ -39,12 +39,14 @@ func Test_NewSupervisor(t *testing.T) {
 	s := NewSupervisor()
 	assert.NotNil(t, s.baseCtx)
 	assert.NotNil(t, s.baseCancel)
+	assert.NotNil(t, s.recoveryFn)
 
 	// ctx option
 	ctx := context.WithValue(context.Background(), "hey", 123) //nolint:revive,staticcheck // used only for testing
 	s = NewSupervisor(WithSupervisorBaseContext(ctx))
 	assert.NotNil(t, s.baseCtx)
 	assert.NotNil(t, s.baseCancel)
+	assert.NotNil(t, s.recoveryFn)
 	assert.Equal(t, 123, s.baseCtx.Value("hey"))
 }
 

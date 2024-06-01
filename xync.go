@@ -55,7 +55,9 @@ func WithSupervisorRecovery(fn func(any)) SupervisorOption {
 
 // NewSupervisor creates a fresh instance of the goroutine supervisor.
 func NewSupervisor(opts ...SupervisorOption) *Supervisor {
-	s := &Supervisor{}
+	s := &Supervisor{
+		recoveryFn: func(a any) {}, // suppress
+	}
 
 	for _, opt := range opts {
 		opt(s)
